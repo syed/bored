@@ -24,7 +24,7 @@
 ############################################################################/
 
 from PySide import QtCore, QtGui
-
+from PySide.QtGui import QTabletEvent
 
 class ScribbleArea(QtGui.QWidget):
     def __init__(self, parent=None):
@@ -33,8 +33,11 @@ class ScribbleArea(QtGui.QWidget):
         self.setAttribute(QtCore.Qt.WA_StaticContents)
         self.modified = False
         self.scribbling = False
-        self.myPenWidth = 1
+        self.eraser = False
+        self.stylus_touch = False
+        self.myPenWidth = 3
         self.myPenColor = QtCore.Qt.blue
+        self.oldColor = self.myPenColor
         self.image = QtGui.QImage()
         self.lastPoint = QtCore.QPoint()
 
@@ -64,7 +67,7 @@ class ScribbleArea(QtGui.QWidget):
         self.myPenColor = newColor
 
     def setPenWidth(self, newWidth):
-        self.myPenWidth = newWidth
+        self.myPenWidth = newWidth      
 
     def clearImage(self):
         self.image.fill(QtGui.qRgb(255, 255, 255))
@@ -84,6 +87,38 @@ class ScribbleArea(QtGui.QWidget):
         if event.button() == QtCore.Qt.LeftButton and self.scribbling:
             self.drawLineTo(event.pos())
             self.scribbling = False
+
+    def switchToEraser(self):
+        print "Switched to eraser"
+        self.oldColor = self.myPenColor
+        self.myPenColor = QtCore.Qt.white
+        self.myPenWidth += 40
+        self.eraser = True
+
+    def switchToPen(self):
+        self.myPenColor = self.oldColor
+        self.myPenWidth -= 40
+        self.eraser = False
+
+
+    def tabletEvent(self, event):
+        if event.pointerType() == QTabletEvent.PointerType.Eraser:
+            if not self.eraser:
+                self.switchToEraser()
+            self.drawLineTo(event.pos())
+
+        else:
+            if self.eraser:
+                self.switchToPen()
+            if event.pressure() <  0.001:
+                self.stylus_touch = False
+            if not self.stylus_touch and event.pressure() >  0.001:
+                self.lastPoint = event.pos()
+                self.stylus_touch = True
+                
+            if event.pressure() >  0.001:
+                self.drawLineTo(event.pos())
+            print event.pressure()
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
@@ -105,7 +140,7 @@ class ScribbleArea(QtGui.QWidget):
         painter.drawLine(self.lastPoint, endPoint)
         self.modified = True
 
-        rad = self.myPenWidth / 2 + 2
+        rad = self.myPenWidth/2 + 2
         self.update(QtCore.QRect(self.lastPoint, endPoint).normalized().adjusted(-rad, -rad, +rad, +rad))
         self.lastPoint = QtCore.QPoint(endPoint)
 
@@ -154,7 +189,7 @@ class MainWindow(QtGui.QMainWindow):
         self.createActions()
         self.createMenus()
 
-        self.setWindowTitle("Scribble")
+        self.setWindowTitle("Board")
         self.resize(500, 500)
 
     def closeEvent(self, event):
